@@ -1,13 +1,29 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import Navbar from "@/components/layout/Navbar";
+import Footer from "@/components/layout/Footer";
+import HeroSection from "@/components/home/HeroSection";
+import HowItWorksSection from "@/components/home/HowItWorksSection";
+import PlatformsSection from "@/components/home/PlatformsSection";
+import BenefitsSection from "@/components/home/BenefitsSection";
+import { Helmet } from "react-helmet-async";
 
 const Index = () => {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <>
+      <Helmet>
+        <title>TradeID - Instant Trading ID Activation | Automated WhatsApp Onboarding</title>
+        <meta name="description" content="Get your trading account activated instantly with our WhatsApp-powered automated system. Platform selection, UPI payments, and instant ID activation." />
+      </Helmet>
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <main>
+          <HeroSection />
+          <HowItWorksSection />
+          <PlatformsSection />
+          <BenefitsSection />
+        </main>
+        <Footer />
       </div>
-    </div>
+    </>
   );
 };
 
