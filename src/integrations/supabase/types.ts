@@ -14,16 +14,173 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      admin_users: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          role: Database["public"]["Enums"]["admin_role"] | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          role?: Database["public"]["Enums"]["admin_role"] | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          role?: Database["public"]["Enums"]["admin_role"] | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      clients: {
+        Row: {
+          admin_assigned: boolean | null
+          client_name: string | null
+          created_at: string
+          id: string
+          login_url: string | null
+          payment_amount: number | null
+          payment_status: Database["public"]["Enums"]["payment_status"] | null
+          selected_platform: string | null
+          state: Database["public"]["Enums"]["client_state"] | null
+          trading_id: string | null
+          trading_password: string | null
+          transaction_id: string | null
+          updated_at: string
+          wallet_amount: number | null
+          whatsapp_number: string
+        }
+        Insert: {
+          admin_assigned?: boolean | null
+          client_name?: string | null
+          created_at?: string
+          id?: string
+          login_url?: string | null
+          payment_amount?: number | null
+          payment_status?: Database["public"]["Enums"]["payment_status"] | null
+          selected_platform?: string | null
+          state?: Database["public"]["Enums"]["client_state"] | null
+          trading_id?: string | null
+          trading_password?: string | null
+          transaction_id?: string | null
+          updated_at?: string
+          wallet_amount?: number | null
+          whatsapp_number: string
+        }
+        Update: {
+          admin_assigned?: boolean | null
+          client_name?: string | null
+          created_at?: string
+          id?: string
+          login_url?: string | null
+          payment_amount?: number | null
+          payment_status?: Database["public"]["Enums"]["payment_status"] | null
+          selected_platform?: string | null
+          state?: Database["public"]["Enums"]["client_state"] | null
+          trading_id?: string | null
+          trading_password?: string | null
+          transaction_id?: string | null
+          updated_at?: string
+          wallet_amount?: number | null
+          whatsapp_number?: string
+        }
+        Relationships: []
+      }
+      contact_submissions: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          message: string
+          name: string
+          subject: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          message: string
+          name: string
+          subject: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          message?: string
+          name?: string
+          subject?: string
+        }
+        Relationships: []
+      }
+      payments: {
+        Row: {
+          amount: number
+          client_id: string | null
+          created_at: string
+          id: string
+          payer_name: string | null
+          payment_timestamp: string | null
+          status: Database["public"]["Enums"]["payment_status"] | null
+          upi_transaction_id: string | null
+          webhook_raw_data: Json | null
+        }
+        Insert: {
+          amount: number
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          payer_name?: string | null
+          payment_timestamp?: string | null
+          status?: Database["public"]["Enums"]["payment_status"] | null
+          upi_transaction_id?: string | null
+          webhook_raw_data?: Json | null
+        }
+        Update: {
+          amount?: number
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          payer_name?: string | null
+          payment_timestamp?: string | null
+          status?: Database["public"]["Enums"]["payment_status"] | null
+          upi_transaction_id?: string | null
+          webhook_raw_data?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
-      [_ in never]: never
+      admin_role: "admin" | "agent"
+      client_state:
+        | "awaiting_platform_selection"
+        | "awaiting_client_name"
+        | "awaiting_payment"
+        | "payment_received"
+        | "admin_processing"
+        | "completed"
+        | "expired"
+      payment_status: "pending" | "paid" | "failed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +307,18 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      admin_role: ["admin", "agent"],
+      client_state: [
+        "awaiting_platform_selection",
+        "awaiting_client_name",
+        "awaiting_payment",
+        "payment_received",
+        "admin_processing",
+        "completed",
+        "expired",
+      ],
+      payment_status: ["pending", "paid", "failed"],
+    },
   },
 } as const

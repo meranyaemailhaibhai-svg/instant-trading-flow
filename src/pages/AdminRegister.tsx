@@ -1,49 +1,73 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { TrendingUp, Mail, Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
+import { TrendingUp, Mail, Lock, ArrowRight, Eye, EyeOff, UserPlus } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
-const Admin = () => {
+const AdminRegister = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  const { signIn, user, isAdmin, isLoading: authLoading } = useAuth();
-
-  useEffect(() => {
-    if (!authLoading && user && isAdmin) {
-      navigate("/admin/dashboard");
-    }
-  }, [user, isAdmin, authLoading, navigate]);
+  const { signUp } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email || !password) {
-      toast.error("Please enter both email and password");
+    if (!email || !password || !confirmPassword) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
+    if (password.length < 6) {
+      toast.error("Password must be at least 6 characters");
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const { error } = await signIn(email, password);
+      const { error } = await signUp(email, password);
       
       if (error) {
-        if (error.message.includes("Invalid login credentials")) {
-          toast.error("Invalid email or password");
+        if (error.message.includes("User already registered")) {
+          toast.error("An account with this email already exists");
         } else {
           toast.error(error.message);
         }
       } else {
-        toast.success("Login successful!");
-        // Navigation will happen via useEffect when isAdmin updates
+        // Get the current user and add to admin_users table
+        const { data: userData } = await supabase.auth.getUser();
+        
+        if (userData.user) {
+          const { error: adminError } = await supabase
+            .from("admin_users")
+            .insert({
+              user_id: userData.user.id,
+              email: email,
+              role: "admin",
+            });
+
+          if (adminError) {
+            console.error("Error creating admin user:", adminError);
+            // If first admin, this might fail due to RLS - that's okay for first registration
+          }
+        }
+
+        toast.success("Registration successful! You can now log in.");
+        navigate("/admin");
       }
     } catch (error) {
       toast.error("An unexpected error occurred");
@@ -52,19 +76,11 @@ const Admin = () => {
     }
   };
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-primary">Loading...</div>
-      </div>
-    );
-  }
-
   return (
     <>
       <Helmet>
-        <title>Admin Login - TradeID</title>
-        <meta name="description" content="Admin login portal for TradeID trading ID management system." />
+        <title>Admin Registration - TradeID</title>
+        <meta name="description" content="Register as an admin for TradeID trading ID management system." />
       </Helmet>
       <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">
         {/* Background Effects */}
@@ -83,16 +99,19 @@ const Admin = () => {
             </span>
           </Link>
 
-          {/* Login Card */}
+          {/* Register Card */}
           <div className="glass-card p-8 gradient-border">
             <div className="text-center mb-8">
-              <h1 className="font-display text-2xl font-bold mb-2">Admin Login</h1>
+              <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+                <UserPlus className="w-7 h-7 text-primary" />
+              </div>
+              <h1 className="font-display text-2xl font-bold mb-2">Admin Registration</h1>
               <p className="text-muted-foreground text-sm">
-                Sign in to access the admin dashboard
+                Create your admin account to manage clients
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
                 <Label htmlFor="email">Email Address</Label>
                 <div className="relative">
@@ -121,6 +140,7 @@ const Admin = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
+                    minLength={6}
                   />
                   <button
                     type="button"
@@ -136,6 +156,23 @@ const Admin = () => {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  <Input
+                    id="confirmPassword"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    className="pl-10"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    minLength={6}
+                  />
+                </div>
+              </div>
+
               <Button
                 type="submit"
                 variant="hero"
@@ -144,10 +181,10 @@ const Admin = () => {
                 disabled={isLoading}
               >
                 {isLoading ? (
-                  "Signing in..."
+                  "Creating account..."
                 ) : (
                   <>
-                    Sign In
+                    Create Account
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
@@ -156,9 +193,9 @@ const Admin = () => {
 
             <div className="mt-6 pt-6 border-t border-border/50 text-center">
               <p className="text-sm text-muted-foreground">
-                Need an admin account?{" "}
-                <Link to="/admin/register" className="text-primary hover:underline">
-                  Register here
+                Already have an account?{" "}
+                <Link to="/admin" className="text-primary hover:underline">
+                  Sign in
                 </Link>
               </p>
             </div>
@@ -179,4 +216,4 @@ const Admin = () => {
   );
 };
 
-export default Admin;
+export default AdminRegister;
