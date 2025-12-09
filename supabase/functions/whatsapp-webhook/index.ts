@@ -3,12 +3,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-webhook-signature",
 };
 
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const WEBHOOK_SECRET = Deno.env.get("WEBHOOK_SECRET");
 
 const PLATFORMS = [
   "XYZ Options",
@@ -57,6 +58,49 @@ interface ConversationContext {
   client_name: string | null;
   selected_platform: string | null;
   whatsapp_number: string;
+}
+
+// Verify webhook signature using HMAC-SHA256
+async function verifyWebhookSignature(body: string, signature: string | null): Promise<boolean> {
+  if (!WEBHOOK_SECRET) {
+    console.warn("WEBHOOK_SECRET not configured - webhook signature validation disabled");
+    return false; // Fail closed when secret not configured
+  }
+
+  if (!signature) {
+    console.error("No webhook signature provided");
+    return false;
+  }
+
+  try {
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(WEBHOOK_SECRET),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
+
+    const signatureBytes = await crypto.subtle.sign("HMAC", key, encoder.encode(body));
+    const expectedSignature = Array.from(new Uint8Array(signatureBytes))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    // Constant-time comparison to prevent timing attacks
+    if (signature.length !== expectedSignature.length) {
+      return false;
+    }
+    
+    let result = 0;
+    for (let i = 0; i < signature.length; i++) {
+      result |= signature.charCodeAt(i) ^ expectedSignature.charCodeAt(i);
+    }
+    return result === 0;
+  } catch (error) {
+    console.error("Signature verification error:", error);
+    return false;
+  }
 }
 
 async function getAIResponse(message: string, context: ConversationContext) {
@@ -121,9 +165,41 @@ serve(async (req) => {
   }
 
   try {
-    const { message, whatsapp_number, webhook_data } = await req.json();
+    // Read raw body for signature verification
+    const rawBody = await req.text();
+    const signature = req.headers.get("x-webhook-signature");
+
+    // Verify webhook signature
+    const isValidSignature = await verifyWebhookSignature(rawBody, signature);
+    if (!isValidSignature) {
+      console.error("Invalid webhook signature - rejecting request");
+      return new Response(
+        JSON.stringify({ error: "Unauthorized - invalid webhook signature" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const { message, whatsapp_number, webhook_data } = JSON.parse(rawBody);
     
-    console.log("Received webhook:", { message, whatsapp_number });
+    // Validate required fields
+    if (!message || typeof message !== "string" || message.length > 5000) {
+      return new Response(
+        JSON.stringify({ error: "Invalid message format" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!whatsapp_number || typeof whatsapp_number !== "string" || !/^\+?[\d\s-]{10,20}$/.test(whatsapp_number)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid WhatsApp number format" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log("Received verified webhook:", { whatsapp_number });
 
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error("Missing Supabase configuration");
@@ -173,7 +249,7 @@ serve(async (req) => {
 
     // Get AI response
     const aiResponse = await getAIResponse(message, context);
-    console.log("AI Response:", aiResponse);
+    console.log("AI Response processed");
 
     // Determine updates to client record
     const updates: Record<string, any> = {};
@@ -266,7 +342,7 @@ Please scan and pay using the QR code below. After payment, share the transactio
     console.error("Error in whatsapp-webhook:", error);
     return new Response(
       JSON.stringify({ 
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
         response: "I'm experiencing technical difficulties. Please try again later or contact support." 
       }),
       {

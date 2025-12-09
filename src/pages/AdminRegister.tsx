@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { TrendingUp, Mail, Lock, ArrowRight, Eye, EyeOff, UserPlus } from "lucide-react";
+import { TrendingUp, Mail, Lock, ArrowRight, Eye, EyeOff, UserPlus, ShieldX } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -15,12 +15,43 @@ const AdminRegister = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingFirstAdmin, setIsCheckingFirstAdmin] = useState(true);
+  const [isFirstAdmin, setIsFirstAdmin] = useState(false);
   const navigate = useNavigate();
   const { signUp } = useAuth();
+
+  // Check if this is the first admin registration
+  useEffect(() => {
+    const checkFirstAdmin = async () => {
+      try {
+        const { data, error } = await supabase.rpc("is_first_admin");
+        if (error) {
+          console.error("Error checking first admin:", error);
+          setIsFirstAdmin(false);
+        } else {
+          setIsFirstAdmin(data === true);
+        }
+      } catch (error) {
+        console.error("Error checking first admin:", error);
+        setIsFirstAdmin(false);
+      } finally {
+        setIsCheckingFirstAdmin(false);
+      }
+    };
+
+    checkFirstAdmin();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Double-check first admin status before proceeding
+    const { data: stillFirstAdmin, error: checkError } = await supabase.rpc("is_first_admin");
+    if (checkError || stillFirstAdmin !== true) {
+      toast.error("Admin registration is disabled. Contact an existing admin.");
+      return;
+    }
+
     if (!email || !password || !confirmPassword) {
       toast.error("Please fill in all fields");
       return;
@@ -47,23 +78,27 @@ const AdminRegister = () => {
         } else {
           toast.error(error.message);
         }
-      } else {
-        // Get the current user and add to admin_users table
-        const { data: userData } = await supabase.auth.getUser();
-        
-        if (userData.user) {
-          const { error: adminError } = await supabase
-            .from("admin_users")
-            .insert({
-              user_id: userData.user.id,
-              email: email,
-              role: "admin",
-            });
+        return;
+      }
+      
+      // Get the current user and add to admin_users table
+      const { data: userData } = await supabase.auth.getUser();
+      
+      if (userData.user) {
+        const { error: adminError } = await supabase
+          .from("admin_users")
+          .insert({
+            user_id: userData.user.id,
+            email: email,
+            role: "admin",
+          });
 
-          if (adminError) {
-            console.error("Error creating admin user:", adminError);
-            // If first admin, this might fail due to RLS - that's okay for first registration
-          }
+        if (adminError) {
+          console.error("Error creating admin user:", adminError);
+          // Clean up: delete the auth user since admin creation failed
+          toast.error("Failed to create admin account. Please contact support.");
+          await supabase.auth.signOut();
+          return;
         }
 
         toast.success("Registration successful! You can now log in.");
@@ -75,6 +110,64 @@ const AdminRegister = () => {
       setIsLoading(false);
     }
   };
+
+  // Show loading state while checking
+  if (isCheckingFirstAdmin) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+
+  // Show blocked message if not first admin
+  if (!isFirstAdmin) {
+    return (
+      <>
+        <Helmet>
+          <title>Registration Disabled - TradeID</title>
+        </Helmet>
+        <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">
+          <div className="absolute inset-0 bg-hero-glow" />
+          
+          <div className="w-full max-w-md relative z-10">
+            <Link to="/" className="flex items-center justify-center gap-2 mb-8">
+              <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
+                <TrendingUp className="w-6 h-6 text-primary" />
+              </div>
+              <span className="font-display font-bold text-2xl">
+                Trade<span className="text-primary">ID</span>
+              </span>
+            </Link>
+
+            <div className="glass-card p-8 gradient-border text-center">
+              <div className="w-14 h-14 rounded-2xl bg-destructive/10 flex items-center justify-center mx-auto mb-4">
+                <ShieldX className="w-7 h-7 text-destructive" />
+              </div>
+              <h1 className="font-display text-2xl font-bold mb-2">Registration Disabled</h1>
+              <p className="text-muted-foreground mb-6">
+                Admin registration is closed. New admins can only be added by existing administrators.
+              </p>
+              <Link to="/admin">
+                <Button variant="hero" className="w-full">
+                  Sign In Instead
+                </Button>
+              </Link>
+            </div>
+
+            <div className="text-center mt-6">
+              <Link
+                to="/"
+                className="text-sm text-muted-foreground hover:text-primary transition-colors"
+              >
+                ← Back to Home
+              </Link>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -98,6 +191,13 @@ const AdminRegister = () => {
               Trade<span className="text-primary">ID</span>
             </span>
           </Link>
+
+          {/* First Admin Notice */}
+          <div className="mb-6 p-4 rounded-lg bg-primary/10 border border-primary/20 text-center">
+            <p className="text-sm text-primary">
+              🎉 You're setting up the first admin account for TradeID
+            </p>
+          </div>
 
           {/* Register Card */}
           <div className="glass-card p-8 gradient-border">
