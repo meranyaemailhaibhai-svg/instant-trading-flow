@@ -169,6 +169,7 @@ export type Database = {
     }
     Functions: {
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_first_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       admin_role: "admin" | "agent"

@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { MessageCircle, Phone, Mail, Clock, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const faqs = [
   {
@@ -52,11 +53,34 @@ const Contact = () => {
     message: ""
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // This will be connected to backend later
-    toast.success("Message sent! We'll get back to you within 24 hours.");
-    setFormData({ name: "", email: "", subject: "", message: "" });
+    setIsSubmitting(true);
+
+    try {
+      const { error } = await supabase
+        .from("contact_submissions")
+        .insert({
+          name: formData.name,
+          email: formData.email,
+          subject: formData.subject,
+          message: formData.message,
+        });
+
+      if (error) {
+        console.error("Error submitting form:", error);
+        toast.error("Failed to send message. Please try again.");
+      } else {
+        toast.success("Message sent! We'll get back to you within 24 hours.");
+        setFormData({ name: "", email: "", subject: "", message: "" });
+      }
+    } catch (error) {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -199,8 +223,8 @@ const Contact = () => {
                     />
                   </div>
 
-                  <Button type="submit" variant="hero" size="lg" className="w-full">
-                    Send Message
+                  <Button type="submit" variant="hero" size="lg" className="w-full" disabled={isSubmitting}>
+                    {isSubmitting ? "Sending..." : "Send Message"}
                   </Button>
                 </form>
               </div>
